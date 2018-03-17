@@ -87,7 +87,19 @@ public class AssignmentsTable extends JPanel implements TreeListener<Object> {
 						if(comp == null) comp = new JLabel(icon);
 						else ((JLabel) comp).setIcon(icon);
 						return comp;
-					}, null, ComponentTree.ROW_HEIGHT + TableRow.BORDER_THICKNESS * 2
+					}, (node0, node1) -> {
+						Assignment a0 = (Assignment) node0.get();
+						Assignment a1 = (Assignment) node1.get();
+						
+						int doneCompare = Boolean.compare(a0.isCompleted(), a1.isCompleted());
+						int priorityCompare = a0.getPriority().compareTo(a1.getPriority());
+						
+						return doneCompare == 0 ? 
+								priorityCompare == 0 ?
+										Float.compare(a0.getImportance(), a1.getImportance())
+										: priorityCompare
+										: doneCompare; 
+					}, ComponentTree.ROW_HEIGHT + TableRow.BORDER_THICKNESS * 2
 				);
 			
 			controller.addColumn(2, "Done", a.getMethod("isCompleted"), a.getMethod("setCompleted", boolean.class),

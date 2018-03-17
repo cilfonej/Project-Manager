@@ -29,6 +29,7 @@ import components.color.ColoredIconUtil;
 import components.tree.ComponentTree;
 import components.tree.TreeNode;
 import components.tree.table.TableRow.TableBorder;
+import managment.Assignment;
 
 public class Column<T> extends JComponent implements Comparator<TreeNode<T>>, MouseInputListener {
 	private static final long serialVersionUID = 6505333788725055524L;
@@ -80,7 +81,14 @@ public class Column<T> extends JComponent implements Comparator<TreeNode<T>>, Mo
 	public JComponent update(JComponent comp, T obj) { return creator == null ? comp : creator.createComponent(this, obj, comp); }
 	
 	public int compare(TreeNode<T> o1, TreeNode<T> o2) {
-		return controller.isAccending() ? sorter.compare(o1, o2) : sorter.compare(o2, o1); 
+		boolean dontAllowSwap = false;
+		Object obj0 = o1.get(), obj1 = o2.get();
+		if(obj0 instanceof Assignment && obj1 instanceof Assignment) {
+			Assignment a0 = (Assignment) obj0, a1 = (Assignment) obj1;
+			dontAllowSwap = a0.isCompleted() ^ a1.isCompleted();
+		}
+		
+		return dontAllowSwap || controller.isAccending() ? sorter.compare(o1, o2) : sorter.compare(o2, o1); 
 	}
 
 	@SuppressWarnings("unchecked")
