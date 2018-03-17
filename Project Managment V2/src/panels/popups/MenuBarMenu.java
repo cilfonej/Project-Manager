@@ -13,6 +13,7 @@ import javax.swing.JSeparator;
 import components.color.ColorLookupTable;
 import components.color.picker.ColorPicker;
 import managment.icons.IconLoader;
+import managment.storage.JsonSerializationContext;
 import managment.storage.SerializationContext;
 
 public class MenuBarMenu extends JMenu implements ActionListener {
@@ -24,12 +25,12 @@ public class MenuBarMenu extends JMenu implements ActionListener {
 	private JMenuItem colorButton;
 	private JCheckBoxMenuItem darkCkeckBox;
 	
-	private SerializationContext context;
+	private JsonSerializationContext context;
 	private Color newColor;
 	
 	private boolean doneRestartAlert;
 	
-	public MenuBarMenu(SerializationContext context) {
+	public MenuBarMenu(JsonSerializationContext context) {
 		super("Settings");
 		this.context = context;
 		

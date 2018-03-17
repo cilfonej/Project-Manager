@@ -1,5 +1,6 @@
 package managment.storage;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
@@ -10,7 +11,7 @@ import java.util.function.Consumer;
 import managment.Assignment;
 import managment.AssignmentGrouping;
 import managment.Root;
-import managment.storage.serialization.ISerializable;
+import managment.storage.serialization.json.IJsonManualSerializable;
 import panels.MainAssignmentFrame;
 
 public class IOUtil extends Thread {
@@ -18,35 +19,37 @@ public class IOUtil extends Thread {
 	private static final long  SYNC_STABLE_TIME = 2500;
 	private static final long UPDATE_CYCLE_TIME = 10 * 60 * 1000;
 	
-	private static final HashMap<SerializationContext, IOUtil> UTIL = new HashMap<>();
-	private static IOUtil get(SerializationContext context) {
+	private static final HashMap<JsonSerializationContext, IOUtil> UTIL = new HashMap<>();
+	private static IOUtil get(JsonSerializationContext context) {
 		IOUtil util = UTIL.get(context);
 		if(util == null) UTIL.put(context, util = new IOUtil(context));
 		return util;
 	}
 
-	public static void updateAll(SerializationContext context) { get(context)._updateAll(); }
+	public static void updateAll(JsonSerializationContext context) { get(context)._updateAll(); }
 	
-	public static void update(ISerializable serializable) { get(serializable.getContext())._update(serializable); }
-	public static void delete(ISerializable serializable) { get(serializable.getContext())._delete(serializable); }
+	public static void update(IJsonManualSerializable serializable) { get(serializable.getContext())._update(serializable); }
+	public static void delete(IJsonManualSerializable serializable) { get(serializable.getContext())._delete(serializable); }
+
+	public static void driveCheck(IJsonManualSerializable serializable) { get(serializable.getContext())._driveCheck(); }
 	        
-	public static <T extends ISerializable> void load(
-			SerializationContext context, int index, Class<T> clazz, Consumer<T> callback, Object... args) {
+	public static <T extends IJsonManualSerializable> void load(
+			JsonSerializationContext context, int index, Class<T> clazz, Consumer<T> callback, Object... args) {
 		get(context)._load(index, clazz, callback, args);
 	}
 	
 	private DriveInterface driveInterface;
-	private SerializationContext context;
+	private JsonSerializationContext context;
 	
 	private LinkedBlockingQueue<Token> actions; 
-	private HashMap<ISerializable, UpdateToken> invoke;
+	private HashMap<IJsonManualSerializable, UpdateToken> invoke;
 	
 	private Root root;
 	
 	private long saveTimeout, syncTimeout, pokeTimeout;
 	private boolean resetSaveTimeout, resetSyncTimeout, resetPokeTimeout;
 	
-	private IOUtil(SerializationContext context) {
+	private IOUtil(JsonSerializationContext context) {
 		actions = new LinkedBlockingQueue<>();
 		invoke = new HashMap<>();
 		
@@ -55,6 +58,7 @@ public class IOUtil extends Thread {
 		
 		actions.offer(new SyncFromDriveToken(null));
 		actions.offer(new LoadContextToken(null));
+//		actions.offer(new SyncToDriveToken(null));
 		
 		saveTimeout = Long.MAX_VALUE;
 		syncTimeout = Long.MAX_VALUE;
@@ -98,19 +102,21 @@ public class IOUtil extends Thread {
 	}
 	
 	private void close() {
-		context.save();
-//		driveInterface.syncToDrive(); TODO Uncomment Drive Stuff
+		context.saveFile();
+		driveInterface.syncToDrive(); 
 	}
 
-//	private void _syncToDrive(ISerializable serializable)   { actions.add(new SyncToDriveToken(null));   }
-//	private void _loadFromDrive(ISerializable serializable) { actions.add(new SyncFromDriveToken(null)); }
+//	private void _syncToDrive(IJsonManualSerializable serializable)   { actions.add(new SyncToDriveToken(null));   }
+//	private void _loadFromDrive(IJsonManualSerializable serializable) { actions.add(new SyncFromDriveToken(null)); }
 	
 	private void _updateAll() { offerToken(new UpdateAllToken()); }
 	
-	private void _update(ISerializable serializable) { offerToken(new UpdateToken(serializable, false)); }
-	private void _delete(ISerializable serializable) { offerToken(new UpdateToken(serializable,  true)); }
+	private void _update(IJsonManualSerializable serializable) { offerToken(new UpdateToken(serializable, false)); }
+	private void _delete(IJsonManualSerializable serializable) { offerToken(new UpdateToken(serializable,  true)); }
 	
-	private <T extends ISerializable> void _load(int index, Class<T> clazz, Consumer<T> callback, Object... args) {
+	private void _driveCheck() { try { driveInterface.checkAndCorrectVersion(); } catch(IOException e) { e.printStackTrace(); }}
+	
+	private <T extends IJsonManualSerializable> void _load(int index, Class<T> clazz, Consumer<T> callback, Object... args) {
 		offerToken(new LoadToken<>(index, clazz, args, callback));
 	}
 	
@@ -141,13 +147,14 @@ public class IOUtil extends Thread {
 		
 		public Void invokeCallback() {
 			MainAssignmentFrame.setStatusText("Saving...");
-				for(Map.Entry<ISerializable, UpdateToken> entry : invoke.entrySet()) {
+				for(Map.Entry<IJsonManualSerializable, UpdateToken> entry : invoke.entrySet()) {
 					UpdateToken token = entry.getValue();
 					if(token.delete) context.delete(token.serializable);
 					else context.update(token.serializable);
 				}
 			
-				context.save();
+				invoke.clear();
+				context.saveFile();
 				resetSyncTimeout = true;
 			MainAssignmentFrame.setStatusText("");
 			
@@ -160,7 +167,7 @@ public class IOUtil extends Thread {
 		
 		public Root invokeCallback() {
 			MainAssignmentFrame.setStatusText("Loading...");
-				context.load();
+				context.loadFile(FileStorage.SAVE_FILE);
 				
 				root = context.load(Root.class, 0);
 				if(root == null) {
@@ -178,7 +185,7 @@ public class IOUtil extends Thread {
 		
 		public Void invokeCallback() {
 			MainAssignmentFrame.setStatusText("Uploading...");
-//				driveInterface.syncToDrive(); TODO Uncomment Drive Stuff
+				driveInterface.syncToDrive();
 			MainAssignmentFrame.setStatusText("");
 			
 			return null;
@@ -190,7 +197,7 @@ public class IOUtil extends Thread {
 		
 		public Void invokeCallback() {
 			MainAssignmentFrame.setStatusText("Downloading...");
-//				driveInterface.syncToLocal(); TODO Uncomment Drive Stuff
+				driveInterface.syncToLocal();
 			MainAssignmentFrame.setStatusText("");
 			
 			return null;
@@ -214,9 +221,9 @@ public class IOUtil extends Thread {
 	}
 	
 	private class UpdateToken extends Token { 
-		ISerializable serializable;  boolean delete;
+		IJsonManualSerializable serializable;  boolean delete;
 		
-		UpdateToken(ISerializable serializable, boolean delete) { 
+		UpdateToken(IJsonManualSerializable serializable, boolean delete) { 
 			this.serializable = serializable; 
 			this.delete = delete;
 		}
@@ -230,7 +237,7 @@ public class IOUtil extends Thread {
 		}
 	}
 	
-	private class LoadToken<T extends ISerializable> extends ReturningToken<T> { 
+	private class LoadToken<T extends IJsonManualSerializable> extends ReturningToken<T> { 
 		int index; Class<T> clazz; Object[] args;
 		
 		LoadToken(int index, Class<T> clazz, Object[] args, Consumer<T> callback) {

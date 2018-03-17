@@ -1,4 +1,4 @@
-package managment.storage.serialization.json;
+package managment.storage.serialization.json.automatic;
 
 import java.io.IOException;
 import java.lang.reflect.Array;
@@ -295,7 +295,7 @@ public class JsonSerializer {
 		}
 	}
 	
-	@SuppressWarnings({ "rawtypes", "unchecked" })
+	@SuppressWarnings("rawtypes")
 	private void appendObject(JsonGenerator gen, String entryName, Object obj) throws JsonProcessingException, IOException {
 		if(entryName != null) gen.writeFieldName(entryName);
 		

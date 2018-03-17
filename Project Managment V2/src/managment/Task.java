@@ -1,12 +1,16 @@
 package managment;
 
-import managment.storage.IOUtil;
-import managment.storage.SerializationContext;
-import managment.storage.serialization.ISerializable;
-import managment.storage.serialization.Offset;
-import managment.storage.serialization.SerializationUtil;
+import java.io.IOException;
 
-public class Task implements ISerializable {
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
+
+import managment.storage.IOUtil;
+import managment.storage.JsonSerializationContext;
+import managment.storage.serialization.json.IJsonManualSerializable;
+import managment.storage.serialization.json.JsonStringGenerator;
+
+public class Task implements IJsonManualSerializable {
 	private boolean done;
 	private boolean doneOverride;
 	
@@ -14,9 +18,9 @@ public class Task implements ISerializable {
 	private String description;
 	
 	private Assignment assignment;
-	private SerializationContext context;
+	private JsonSerializationContext context;
 
-	protected Task(Assignment assignment, String name, String description, SerializationContext context) {
+	protected Task(Assignment assignment, String name, String description, JsonSerializationContext context) {
 		this(context, assignment);
 		
 		this.name = name;
@@ -25,7 +29,7 @@ public class Task implements ISerializable {
 		IOUtil.update(this);
 	}
 
-	private Task(SerializationContext context, Assignment assignment) { 
+	private Task(JsonSerializationContext context, Assignment assignment) { 
 		this.context = context; 
 		this.assignment = assignment;
 	}
@@ -66,32 +70,46 @@ public class Task implements ISerializable {
 		task.description = this.description;
 	}
 
-	public byte[] serialize() {
-		byte[] data = new byte[1 + name.length() + 4 + description.length() + 4];
-		Offset offset = new Offset();
+	public String serialize() {
+		JsonStringGenerator gen = JsonStringGenerator.getInstance();
 		
-		byte pack = 0;
-		pack |= (byte) (		done ? 1 << 0 : 0);	// 1-bit
-		pack |= (byte) (doneOverride ? 1 << 1 : 0); // 1-bit
-		data[offset.get()] = pack; offset.add(1);
+		gen.writeStringField("name", name);
+		gen.writeStringField("description", description);
+		
+		gen.writeBooleanField("doneOverride", doneOverride);
+		gen.writeBooleanField("done", done);
+		
+		return gen.generate();
+	}
+	
+	public void deserialize(String data) {
+		try(JsonParser parser = JsonStringGenerator.FACTORY.createParser(data)) {
 
-		SerializationUtil.serialize(name, offset, data);
-		SerializationUtil.serialize(description, offset, data);
-		
-		return data;
+			JsonToken token;
+			while((token = parser.nextToken()) != null) {
+				switch(token) {
+					case VALUE_STRING:
+						if(parser.getCurrentName().equals("name")) 
+							name = parser.getText();
+						
+						else if(parser.getCurrentName().equals("description")) 
+							description = parser.getText();
+					break;
+					
+					case VALUE_TRUE:
+					case VALUE_FALSE:
+						if(parser.getCurrentName().equals("doneOverride")) 
+							doneOverride = parser.getBooleanValue();
+
+						else if(parser.getCurrentName().equals("done")) 
+							done = parser.getBooleanValue();
+					break;
+					
+					default: break;
+				}
+			}
+		} catch (IOException e) { e.printStackTrace(); }
 	}
 	
-	public void deserialize(byte[] data) {
-		Offset offset = new Offset();
-		
-		byte pack = data[offset.get()];
-				done = (pack & 0b0_01) != 0; 
-		doneOverride = (pack & 0b0_10) != 0;
-		offset.add(1);
-		
-		name = SerializationUtil.deserializeString(offset, data);
-		description = SerializationUtil.deserializeString(offset, data);
-	}
-	
-	public SerializationContext getContext() { return context; }
+	public JsonSerializationContext getContext() { return context; }
 }

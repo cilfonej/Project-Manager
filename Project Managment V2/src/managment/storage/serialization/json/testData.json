@@ -1,0 +1,40 @@
+{
+  "0" : {
+    "a" : {
+      "data" : [ 0.10000000149011612, 10.0, 100.0, -0.10000000149011612 ],
+      "classes" : [ "java.lang.Float", "java.lang.Float", "java.lang.Float", "java.lang.Float" ]
+    },
+    "i" : 100,
+    "time" : 363492768315122,
+    
+    "friends" : {
+      "data" : [ 2 ],
+      "classes" : [ "managment.storage.serialization.json.automatic.ParentDeserializationTest$Child" ]
+    },
+    "parentID" : 1,
+    "class" : "managment.storage.serialization.json.automatic.ParentDeserializationTest$Child",
+    "transient" : "Qm9i",
+    "super" : {
+      "field" : 5,
+      "memos" : {
+        "data" : [ "Hello", "World", "Meeeeeeemeeeess", "Fudge", "Your", "Rules" ],
+        "classes" : [ "java.lang.String", "java.lang.String", "java.lang.String", "java.lang.String", "java.lang.String", "java.lang.String" ]
+      },
+      "child" : null,
+      "class" : "managment.storage.serialization.json.automatic.ParentDeserializationTest$Parent",
+      "transient" : "Qm9i",
+      "super" : null
+    }
+  },
+  
+  "3" : {
+    "field" : 5,
+    "memos" : {
+      "data" : [ "Hello", "World", "Meeeeeeemeeeess", "Fudge", "Your", "Rules" ],
+      "classes" : [ "java.lang.String", "java.lang.String", "java.lang.String", "java.lang.String", "java.lang.String", "java.lang.String" ]
+    },
+    "child" : 2,
+    "class" : "managment.storage.serialization.json.automatic.ParentDeserializationTest$Parent",
+    "super" : null
+  }
+}

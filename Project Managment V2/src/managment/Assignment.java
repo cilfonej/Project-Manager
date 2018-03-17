@@ -1,17 +1,22 @@
 package managment;
 
+import java.io.IOException;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalUnit;
 import java.util.ArrayList;
 
-import managment.storage.IOUtil;
-import managment.storage.SerializationContext;
-import managment.storage.serialization.ISerializable;
-import managment.storage.serialization.Offset;
-import managment.storage.serialization.SerializationUtil;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 
-public class Assignment implements ISerializable {
+import managment.storage.IOUtil;
+import managment.storage.JsonSerializationContext;
+import managment.storage.serialization.json.IJsonManualSerializable;
+import managment.storage.serialization.json.JsonStringGenerator;
+
+public class Assignment implements IJsonManualSerializable {
 	private static final TemporalUnit UNITS = ChronoUnit.MINUTES;
 	
 	private LocalDateTime creationDate;
@@ -31,10 +36,10 @@ public class Assignment implements ISerializable {
 	private float percentDone;
 	
 	private AssignmentGrouping grouping;
-	private SerializationContext context;
+	private JsonSerializationContext context;
 	private boolean deleted;
 	
-	protected Assignment(AssignmentGrouping grouping, LocalDateTime deadline, Priority priority, float impotrance, String name, String description, SerializationContext context) {
+	protected Assignment(AssignmentGrouping grouping, LocalDateTime deadline, Priority priority, float impotrance, String name, String description, JsonSerializationContext context) {
 		this(context, grouping);
 		
 		this.creationDate = LocalDateTime.now();
@@ -50,7 +55,7 @@ public class Assignment implements ISerializable {
 		IOUtil.update(this);
 	}
 
-	private Assignment(SerializationContext context, AssignmentGrouping grouping) { 
+	private Assignment(JsonSerializationContext context, AssignmentGrouping grouping) { 
 		this.context = context; 
 		this.grouping = grouping;
 		this.tasks = new ArrayList<>();
@@ -208,58 +213,91 @@ public class Assignment implements ISerializable {
 		return assignment;
 	}
 	
-	public byte[] serialize() {
-		byte[] data = new byte[8 + 8 + 1 + 4 + name.length() + 4 + description.length() + 4 + tasks.size() * 4 + 4];
-		Offset offset = new Offset();
+	public String serialize() {
+		JsonStringGenerator gen = JsonStringGenerator.getInstance();
 		
-		SerializationUtil.serialize(creationDate, offset, data);
-		SerializationUtil.serialize(	deadline, offset, data);
+		gen.writeStringField("name", name);
+		gen.writeStringField("description", description);
 		
-		byte pack = 0;
-		pack |= (byte) priority.ordinal();						   // 3-bits
-		pack |= (byte) (completeOverride ? 0xFF & 0b0_001000 : 0); // 1-bit
-		pack |= (byte) (	   completed ? 0xFF & 0b0_010000 : 0); // 1-bit
-		pack |= (byte) (	   	 passive ? 0xFF & 0b0_100000 : 0); // 1-bit
-		data[offset.get()] = pack; offset.add(1);
-
-		SerializationUtil.serialize(impotrance, offset, data);
-
-		SerializationUtil.serialize(name, offset, data);
-		SerializationUtil.serialize(description, offset, data);
+		gen.writeNumberField("creationDate", creationDate.atZone(ZoneId.systemDefault()).toEpochSecond());
+		gen.writeNumberField("deadline", deadline.atZone(ZoneId.systemDefault()).toEpochSecond());
 		
-		SerializationUtil.serialize(tasks.size(), offset, data);
-		for(Task task : tasks) SerializationUtil.serialize(context.getID(task), offset, data);
+		gen.writeStringField("priority", priority.name());
 		
-		return data;
+		gen.writeBooleanField("completeOverride", completeOverride);
+		gen.writeBooleanField("completed", completed);
+		gen.writeBooleanField("passive", passive);
+		
+		gen.writeNumberField("impotrance", impotrance);
+		
+		gen.writeFieldName("tasks"); gen.writeStartArray();
+		for(Task task : tasks)
+			gen.writeNumber(context.getID(task));
+		gen.writeEndArray();
+		
+		return gen.generate();
 	}
 	
-	public void deserialize(byte[] data) {
-		Offset offset = new Offset();
-		
-		creationDate = SerializationUtil.deserializeDateTime(offset, data);
-			deadline = SerializationUtil.deserializeDateTime(offset, data);
-				
-		byte pack = data[offset.get()];
-		priority = Priority.values()[pack & 0b0_000111];
-		completeOverride = (pack & 0b0_001000) != 0; 
-		completed 		 = (pack & 0b0_010000) != 0;
-		passive 		 = (pack & 0b0_100000) != 0;
-		offset.add(1);
-		
-		impotrance = SerializationUtil.deserializeFloat(offset, data);
-		
-		name = SerializationUtil.deserializeString(offset, data);
-		description = SerializationUtil.deserializeString(offset, data);
-		
-		for(int i = 0, n = SerializationUtil.deserializeInt(offset, data); i < n; i ++) {
-//			Task task = context.load(Task.class, SerializationUtil.deserializeInt(offset, data), this);
-//			tasks.add(task);
+	public void deserialize(String data) {
+		try(JsonParser parser = JsonStringGenerator.FACTORY.createParser(data)) {
+			JsonToken token;
+			String currentName = null;
+			
+			while((token = parser.nextToken()) != null) {
+				switch(token) {
+					case FIELD_NAME: currentName = parser.getCurrentName(); break;
+					
 
-			IOUtil.load(context, SerializationUtil.deserializeInt(offset, data), Task.class, tasks::add, this);
-		}
+					case VALUE_NUMBER_FLOAT:
+						if(currentName.equals("impotrance")) 
+							impotrance = parser.getFloatValue();
+					break;
+					
+					case VALUE_NUMBER_INT:
+						if(currentName.equals("tasks")) 
+							IOUtil.load(context, parser.getIntValue(), Task.class, tasks::add, this);
+
+						else if(currentName.equals("creationDate")) 
+							creationDate = converToDateTime(parser.getLongValue());
+
+						else if(currentName.equals("deadline")) 
+							deadline = converToDateTime(parser.getLongValue());
+					break;
+					
+					case VALUE_STRING:
+						if(parser.getCurrentName().equals("name")) 
+							name = parser.getText();
+						
+						else if(parser.getCurrentName().equals("description")) 
+							description = parser.getText();
+
+						else if(parser.getCurrentName().equals("priority")) 
+							priority = Priority.valueOf(parser.getText());
+					break;
+					
+					case VALUE_TRUE:
+					case VALUE_FALSE:
+						if(parser.getCurrentName().equals("completeOverride")) 
+							completeOverride = parser.getBooleanValue();
+
+						else if(parser.getCurrentName().equals("completed")) 
+							completed = parser.getBooleanValue();
+
+						else if(parser.getCurrentName().equals("passive")) 
+							passive = parser.getBooleanValue();
+					break;
+					
+					default: break;
+				}
+			}
+		} catch (IOException e) { e.printStackTrace(); }
 	}
 
-	public SerializationContext getContext() { return context; }
+	private static LocalDateTime converToDateTime(long epochTime) {
+		return Instant.ofEpochSecond(epochTime).atZone(ZoneId.systemDefault()).toLocalDateTime();
+	}
+	
+	public JsonSerializationContext getContext() { return context; }
 	
 	public static int stage(long expressed, long total, float importance) {
 		if(expressed > total) return 4; if(expressed < 0) return 0;

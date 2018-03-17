@@ -1,20 +1,22 @@
 package managment;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.function.Consumer;
 
 import javax.swing.SwingUtilities;
 
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
+
 import components.tree.TreeNode;
 import components.tree.TreeNodeMetadata;
 import managment.storage.IOUtil;
-import managment.storage.SerializationContext;
-import managment.storage.serialization.ISerializable;
-import managment.storage.serialization.Offset;
-import managment.storage.serialization.SerializationUtil;
-import managment.storage.serialization.json.IJsonSerializable;
+import managment.storage.JsonSerializationContext;
+import managment.storage.serialization.json.IJsonManualSerializable;
+import managment.storage.serialization.json.JsonStringGenerator;
 
-public class Root extends TreeNode<Object> implements IJsonSerializable {
+public class Root extends TreeNode<Object> implements IJsonManualSerializable {
 	private transient Consumer<Assignment> updater;
 	
 	private transient Consumer<AssignmentGrouping> addGrouping, removeGrouping;
@@ -22,9 +24,9 @@ public class Root extends TreeNode<Object> implements IJsonSerializable {
 	private transient Consumer<Task> addTask, removeTask;
 	
 	private ArrayList<AssignmentGrouping> groupings;
-	private SerializationContext context;
+	private JsonSerializationContext context;
 	
-	public Root(SerializationContext context) {
+	public Root(JsonSerializationContext context) {
 		super(null);
 		this.context = context;
 		
@@ -88,27 +90,52 @@ public class Root extends TreeNode<Object> implements IJsonSerializable {
 	
 	public ArrayList<AssignmentGrouping> getGroupings() { return groupings; }
 	
-	public byte[] serialize() {
-		byte[] data = new byte[groupings.size() * 4 + 4];
-		Offset offset = new Offset();
+	public String serialize() {
+		JsonStringGenerator gen = JsonStringGenerator.getInstance();
 		
-		SerializationUtil.serialize(groupings.size(), offset, data);
+		gen.writeFieldName("groups"); gen.writeStartArray();
 		for(AssignmentGrouping grouping : groupings)
-			SerializationUtil.serialize(context.getID(grouping), offset, data);
+			gen.writeNumber(context.getID(grouping));
+		gen.writeEndArray();
 		
-		return data;
+		return gen.generate();
 	}
 	
-	public void deserialize(byte[] data) {
-		Offset offset = new Offset();
-		
-		for(int i = 0, n = SerializationUtil.deserializeInt(offset, data); i < n; i ++) {
-//			AssignmentGrouping grouping = context.load(AssignmentGrouping.class, SerializationUtil.deserializeInt(offset, data), this);
-//			groupings.add(grouping);
-
-			IOUtil.load(context, SerializationUtil.deserializeInt(offset, data), AssignmentGrouping.class, groupings::add, this);
-		}
+	public void deserialize(String data) {
+		try(JsonParser parser = JsonStringGenerator.FACTORY.createParser(data)) {
+			
+			JsonToken token;
+//			boolean startReading = false;
+			String currentName = null;
+			
+			while((token = parser.nextToken()) != null) {
+				switch(token) {
+//					case START_ARRAY: 
+//						if(parser.getCurrentName().equals("groups")) 
+//							startReading = true; 
+//					break;
+//					
+//					case END_ARRAY: 
+//						if(parser.getCurrentName().equals("groups")) {
+//							startReading = false; 
+//							return;
+//						}
+//					break;
+				
+					case FIELD_NAME: currentName = parser.getCurrentName(); break;
+					
+					case VALUE_NUMBER_INT:
+//						if(!startReading) continue;
+						if(!currentName.equals("groups")) continue;
+						groupings.add(context.load(AssignmentGrouping.class, parser.getIntValue(), this));
+					break;
+					
+					default: break;
+				}
+			}
+			
+		} catch (IOException e) { e.printStackTrace(); }
 	}
 
-	public SerializationContext getContext() { return context; }
+	public JsonSerializationContext getContext() { return context; }
 }

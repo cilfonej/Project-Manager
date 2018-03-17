@@ -1,31 +1,34 @@
 package managment;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 
-import managment.storage.IOUtil;
-import managment.storage.SerializationContext;
-import managment.storage.serialization.Offset;
-import managment.storage.serialization.SerializationUtil;
-import managment.storage.serialization.json.IJsonSerializable;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 
-public class AssignmentGrouping implements IJsonSerializable {
+import managment.storage.IOUtil;
+import managment.storage.JsonSerializationContext;
+import managment.storage.serialization.json.IJsonManualSerializable;
+import managment.storage.serialization.json.JsonStringGenerator;
+
+public class AssignmentGrouping implements IJsonManualSerializable {
 	private ArrayList<Assignment> assignments;
 	private String name;
 	
 	private Root root;
 	
-	private SerializationContext context;
+	private JsonSerializationContext context;
 	private boolean deleted;
 	
-	public AssignmentGrouping(String name, Root root, SerializationContext context) {
+	public AssignmentGrouping(String name, Root root, JsonSerializationContext context) {
 		this(context, root);
 		this.name = name;
 		
 		IOUtil.update(this);
 	}
 	
-	private AssignmentGrouping(SerializationContext context, Root root) { 
+	private AssignmentGrouping(JsonSerializationContext context, Root root) { 
 		this.context = context;
 		this.root = root;
 		assignments = new ArrayList<>();
@@ -71,30 +74,59 @@ public class AssignmentGrouping implements IJsonSerializable {
 	public String getName() { return name; }
 	public String toString() { return name; }
 
-	public byte[] serialize() {
-		byte[] data = new byte[name.length() + 4 + assignments.size() * 4 + 4];
-		Offset offset = new Offset();
+	public String serialize() {
+		JsonStringGenerator gen = JsonStringGenerator.getInstance();
 		
-		SerializationUtil.serialize(name, offset, data);
+		gen.writeStringField("name", name);
 		
-		SerializationUtil.serialize(assignments.size(), offset, data);
+		gen.writeFieldName("assignments"); gen.writeStartArray();
 		for(Assignment assignment : assignments)
-			SerializationUtil.serialize(context.getID(assignment), offset, data);
+			gen.writeNumber(context.getID(assignment));
+		gen.writeEndArray();
 		
-		return data;
+		return gen.generate();
 	}
 	
-	public void deserialize(byte[] data) {
-		Offset offset = new Offset();
-		name = SerializationUtil.deserializeString(offset, data);
+	public void deserialize(String data) {
+		try(JsonParser parser = JsonStringGenerator.FACTORY.createParser(data)) {
 		
-		for(int i = 0, n = SerializationUtil.deserializeInt(offset, data); i < n; i ++) {
-//			Assignment assignment = IOUtil.load(Assignment.class, SerializationUtil.deserializeInt(offset, data), this);
-//			assignments.add(assignment);
+			JsonToken token;
+//			boolean startReading = false;
+			String currentName = null;
 			
-			IOUtil.load(context, SerializationUtil.deserializeInt(offset, data), Assignment.class, assignments::add, this);
-		}
+			while((token = parser.nextToken()) != null) {
+				switch(token) {
+//					case START_ARRAY: 
+//						if(parser.getCurrentName().equals("groups")) 
+//							startReading = true; 
+//					break;
+//					
+//					case END_ARRAY: 
+//						if(parser.getCurrentName().equals("groups")) {
+//							startReading = false; 
+//							return;
+//						}
+//					break;
+				
+					case FIELD_NAME: currentName = parser.getCurrentName(); break;
+					
+					case VALUE_NUMBER_INT:
+//						if(!startReading) continue;
+						if(!currentName.equals("assignments")) continue;
+						assignments.add(context.load(Assignment.class, parser.getIntValue(), this));
+					break;
+					
+					case VALUE_STRING:
+						if(parser.getCurrentName().equals("name")) 
+							name = parser.getText();
+					break;
+					
+					default: break;
+				}
+			}
+			
+		} catch (IOException e) { e.printStackTrace(); }
 	}
 	
-	public SerializationContext getContext() { return context; }
+	public JsonSerializationContext getContext() { return context; }
 }

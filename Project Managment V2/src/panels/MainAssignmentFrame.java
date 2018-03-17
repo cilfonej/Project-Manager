@@ -2,6 +2,8 @@ package panels;
 
 import java.awt.BorderLayout;
 import java.awt.EventQueue;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 
 import javax.swing.Box;
 import javax.swing.JFrame;
@@ -11,7 +13,6 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.SwingUtilities;
-import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 
 import components.SplashScreen;
@@ -23,7 +24,7 @@ import managment.Task;
 import managment.icons.IconLoader;
 import managment.storage.FileStorage;
 import managment.storage.IOUtil;
-import managment.storage.SerializationContext;
+import managment.storage.JsonSerializationContext;
 import panels.popups.MenuBarMenu;
 
 public class MainAssignmentFrame extends JFrame {
@@ -44,7 +45,7 @@ public class MainAssignmentFrame extends JFrame {
 	
 	public static void main(String[] args) {
 		splashScreen = new SplashScreen();
-		IOUtil.load(new SerializationContext(FileStorage.SAVE_FILE), 0, Root.class, 
+		IOUtil.load(new JsonSerializationContext(FileStorage.SAVE_FILE), 0, Root.class, 
 				root -> EventQueue.invokeLater(() -> new MainAssignmentFrame(root))
 			);
 	}
@@ -134,19 +135,26 @@ public class MainAssignmentFrame extends JFrame {
 //		table.addTask(assignment.getTasks().get(0));
 //		table.addTask(assignment.getTasks().get(1));
 		
-		Timer timer = new Timer(10 * 60 * 1000, e -> {
-			if(MainAssignmentFrame.this.getState() != JFrame.ICONIFIED) {
-//				table.updateAll();
+//		Timer timer = new Timer(10 * 60 * 1000, e -> {
+//			if(MainAssignmentFrame.this.getState() != JFrame.ICONIFIED) {
+////				table.updateAll();
+//			}
+//		});
+//		
+//		timer.setRepeats(true);
+//		timer.setCoalesce(false);
+//		timer.start();
+		
+		addWindowListener(new WindowAdapter() {
+			public void windowClosing(WindowEvent e) {
+				IOUtil.driveCheck(root);
 			}
 		});
-		
-		timer.setRepeats(true);
-		timer.setCoalesce(false);
-		timer.start();
 		
 		setLocationRelativeTo(null);
 		splashScreen.setVisible(false);
 		splashScreen.dispose();
+		setStatusText("");
 		setVisible(true);
 	}
 	

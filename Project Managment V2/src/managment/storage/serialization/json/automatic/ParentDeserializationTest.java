@@ -1,4 +1,4 @@
-package panels;
+package managment.storage.serialization.json.automatic;
 
 import java.io.IOException;
 import java.io.StringWriter;
@@ -7,9 +7,6 @@ import java.util.HashMap;
 
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
-
-import managment.storage.serialization.json.IJsonSerializable;
-import managment.storage.serialization.json.JsonSerializer;
 
 public class ParentDeserializationTest {
 
